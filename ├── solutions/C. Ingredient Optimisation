@@ -1,0 +1,87 @@
+-- 1. What are the standard ingredients for each pizza?
+SELECT
+pr.pizza_id , pt.topping_name
+FROM pizza_recipes pr
+JOIN unnest(string_to_array(pr.toppings, ',')) AS topping_id_str ON true
+JOIN pizza_toppings pt
+ON pt.topping_id = topping_id_str:: INT
+ORDER BY pr.pizza_id;
+
+-- 2. What was the most commonly added extra?
+WITH extras_count AS (
+  SELECT
+pt.topping_name,
+COUNT (*) AS extras_count,
+  RANK () OVER (ORDER BY COUNT (*) DESC) AS rank
+FROM customer_orders co
+JOIN unnest(string_to_array(co.extras, ',')) AS extras_id_str ON true
+JOIN pizza_toppings pt 
+ON pt.topping_id = extras_id_str:: INT
+WHERE co.extras IS NOT NULL AND co.extras <> 'null'
+GROUP BY pt.topping_name
+)
+SELECT 
+topping_name , extras_count
+FROM extras_count
+WHERE rank = 1;
+
+-- 3. What was the most common exclusion?
+WITH exclusions_count AS (
+  SELECT
+pt.topping_name,
+COUNT (*) AS exclusions_count,
+  RANK () OVER (ORDER BY COUNT (*) DESC) AS rank
+FROM customer_orders co
+JOIN unnest(string_to_array(co.exclusions, ',')) AS exclusions_id_str ON true
+JOIN pizza_toppings pt 
+ON pt.topping_id = exclusions_id_str:: INT
+WHERE co.exclusions IS NOT NULL AND co.exclusions <> 'null'
+GROUP BY pt.topping_name
+)
+SELECT 
+topping_name , exclusions_count
+FROM exclusions_count
+WHERE rank = 1;
+
+-- 4. Generate an order item for each record in the customers_orders table in the format of the following: Meat Lovers - Exclude Cheese, Bacon - Extra Mushroom, Peppers
+WITH exclusions AS (
+  SELECT
+    co.order_id, pt.topping_name AS exclusion_name
+  FROM customer_orders co
+  JOIN unnest(string_to_array(co.exclusions, ',')) AS exclusions_id_str ON true
+  JOIN pizza_toppings pt 
+    ON pt.topping_id = exclusions_id_str::INT
+  WHERE co.exclusions IS NOT NULL AND co.exclusions <> 'null'
+),
+extras AS (
+  SELECT co.order_id , pt.topping_name AS extra_name
+  FROM customer_orders co 
+  JOIN unnest(string_to_array(co.extras, ',')) AS extras_id_str ON true
+  JOIN pizza_toppings pt
+    ON pt.topping_id = extras_id_str::INT 
+  WHERE co.extras IS NOT NULL AND co.extras <> 'null'
+)
+
+SELECT 
+  co.order_id, 
+  pn.pizza_name, 
+  excs.exclusion_list,
+  exts.extra_list,
+  pn.pizza_name
+  || COALESCE(' - Exclude ' || excs.exclusion_list, '')
+  || COALESCE(' - Extra ' || exts.extra_list, '') AS order_item
+FROM customer_orders co 
+JOIN pizza_names pn ON co.pizza_id = pn.pizza_id
+LEFT JOIN (
+  SELECT order_id, STRING_AGG(DISTINCT exclusion_name, ', ') AS exclusion_list
+  FROM exclusions
+  GROUP BY order_id
+) excs ON co.order_id = excs.order_id
+LEFT JOIN (
+  SELECT order_id, STRING_AGG(DISTINCT extra_name, ', ') AS extra_list
+  FROM extras
+  GROUP BY order_id
+) exts ON co.order_id = exts.order_id;
+
+  
+ 
