@@ -1,0 +1,113 @@
+-- 1. How many pizzas were ordered?
+SELECT COUNT(pizza_id) AS count_of_ordered_pizzas
+FROM customer_orders;
+
+-- 2. How many unique customer orders were made?
+SELECT COUNT(DISTINCT order_id) AS count_of_unique_orders
+FROM customer_orders;
+
+-- 3.How many successful orders were delivered by each runner?
+SELECT runner_id,COUNT(order_id) AS count_of_successful_orders
+FROM runner_orders
+WHERE pickup_time <> 'null'
+GROUP BY runner_id
+ORDER BY runner_id;
+
+-- 4.How many of each type of pizza was delivered?
+WITH delivered_orders AS(
+  SELECT
+  order_id
+  FROM runner_orders
+  WHERE pickup_time <> 'null'
+ )
+SELECT
+pizza_id , COUNT(pizza_id) AS count_of_delivered
+FROM customer_orders co
+JOIN delivered_orders d
+ON co.order_id = d.order_id
+GROUP BY pizza_id
+ORDER BY pizza_id;
+
+-- 5.How many Vegetarian and Meatlovers were ordered by each customer?
+SELECT 
+p.pizza_name, COUNT(c.pizza_id) AS count_of_ordered
+FROM customer_orders c
+JOIN pizza_names p
+ON c.pizza_id = p.pizza_id
+GROUP BY p.pizza_name
+ORDER BY p.pizza_name;
+
+-- 6.What was the maximum number of pizzas delivered in a single order?
+WITH delivered_orders AS (
+  SELECT
+  c.order_id, COUNT(c.pizza_id) AS count_of_delivered_pizzas, 
+  RANK () OVER (ORDER BY COUNT(c.pizza_id) DESC) AS rank
+  FROM customer_orders c
+  JOIN runner_orders r
+  ON c.order_id = r.order_id
+  WHERE pickup_time <> 'null'
+  GROUP BY   c.order_id
+  )
+  SELECT  order_id,  count_of_delivered_pizzas
+  FROM delivered_orders
+  WHERE rank = 1;
+
+-- 7.For each customer, how many delivered pizzas had at least 1 change and how many had no changes?
+WITH pizzas_with_change AS (
+  SELECT
+  c.customer_id, COUNT(c.pizza_id) AS count_of_changed_pizzas
+  FROM customer_orders c
+  JOIN runner_orders r
+  ON c.order_id = r.order_id
+  WHERE 
+  ((c.exclusions IS NOT NULL AND c.exclusions <> 'null' AND c.exclusions <> '')
+    OR (c.extras IS NOT NULL AND c.extras <> 'null' AND c.extras <> ''))
+  AND r.pickup_time <> 'null'
+  GROUP BY customer_id
+  ),
+   pizzas_without_changes AS (
+     SELECT
+  c.customer_id, COUNT(c.pizza_id) AS count_of_unchanged_pizzas
+  FROM customer_orders c
+  JOIN runner_orders r
+  ON c.order_id = r.order_id
+  WHERE 
+  ((c.exclusions IS  NULL OR c.exclusions = 'null' OR c.exclusions = '')
+    AND (c.extras IS  NULL OR c.extras = 'null' OR c.extras = ''))
+  AND r.pickup_time <> 'null'
+  GROUP BY customer_id
+  )
+  SELECT 
+  COALESCE(pwc.customer_id, pwoc.customer_id) AS customer_id,
+  COALESCE(pwc.count_of_changed_pizzas, 0) AS count_of_changed_pizzas,
+  COALESCE(pwoc.count_of_unchanged_pizzas, 0) AS count_of_unchanged_pizzas
+  FROM pizzas_with_change pwc
+  FULL OUTER JOIN pizzas_without_changes pwoc
+  ON pwc.customer_id = pwoc.customer_id
+ ORDER BY customer_id;
+
+-- 8. How many pizzas were delivered that had both exclusions and extras?
+SELECT 
+COUNT(pizza_id)
+FROM customer_orders c
+JOIN runner_orders r
+ON c.order_id = r.order_id
+WHERE 
+(exclusions IS NOT NULL AND exclusions <> 'null' AND exclusions <> '')
+AND 
+(extras IS NOT NULL AND extras <> 'null' AND extras <> '' AND extras <> 'NaN')
+AND r.pickup_time <> 'null';
+
+-- 9. What was the total volume of pizzas ordered for each hour of the day?
+SELECT 
+EXTRACT(HOUR FROM order_time) AS hour_of_day, COUNT(pizza_id) AS total_pizzas
+FROM customer_orders 
+GROUP BY hour_of_day
+ORDER BY hour_of_day;
+
+-- 10. What was the volume of orders for each day of the week?
+SELECT 
+ TO_CHAR(order_time, ' Day') AS day, COUNT(order_id) AS total_orders
+FROM customer_orders 
+GROUP BY day
+ORDER BY total_orders;
