@@ -16,4 +16,7 @@ All questions are answered in the `solutions/` folder.
 - PostgreSQL
 - SQL
 
+## Entity Relationship Diagram
+![ERD](./ERD.png)
+
 
