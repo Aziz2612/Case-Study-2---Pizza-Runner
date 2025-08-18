@@ -83,5 +83,55 @@ LEFT JOIN (
   GROUP BY order_id
 ) exts ON co.order_id = exts.order_id;
 
-  
+-- 5. Generate an alphabetically ordered comma separated ingredient list for each pizza order from the customer_orders table and add a 2x in front of any relevant ingredients.
+WITH base_toppings AS(
+SELECT 
+c.order_id,
+pt.topping_name 
+FROM customer_orders c
+JOIN pizza_recipes pr ON c.pizza_id = pr.pizza_id
+JOIN unnest(string_to_array(pr.toppings, ',')) AS t(topping_id_str) ON true
+JOIN pizza_toppings pt ON pt.topping_id = topping_id_str:: INT
+),
+extra_toppings AS(
+ SELECT
+ c.order_id,
+ pt.topping_name
+ FROM customer_orders c
+ JOIN unnest(string_to_array(c.extras, ',')) AS e(extra_id_str) ON TRUE
+ JOIN pizza_toppings pt ON pt.topping_id = extra_id_str::INT
+ WHERE c.extras IS NOT NULL AND c.extras <> 'null'
+
+ ),
+ all_toppings AS (
+ SELECT 
+ order_id, topping_name
+ FROM base_toppings
+ UNION ALL 
+ SELECT order_id, topping_name
+ FROM extra_toppings
+),
+topping_counts AS (
+SELECT 
+order_id, topping_name, COUNT(*) AS topping_count
+FROM all_toppings 
+GROUP BY order_id, topping_name
+),
+formatted_toppings AS (
+SELECT
+order_id,
+CASE 
+  WHEN topping_count > 1 THEN topping_count || 'x' || topping_name
+  ELSE topping_name
+  END AS topping_display
+FROM topping_counts
+)
+SELECT 
+c.order_id, pn.pizza_name || ': ' ||
+STRING_AGG(ft.topping_display, ', ' ORDER BY ft.topping_display) AS ingredient_list
+FROM customer_orders c
+JOIN pizza_names pn ON c.pizza_id = pn.pizza_id
+JOIN formatted_toppings ft ON c.order_id = ft.order_id 
+GROUP BY c.order_id, pn.pizza_name
+ORDER BY c.order_id;
  
