@@ -134,4 +134,48 @@ JOIN pizza_names pn ON c.pizza_id = pn.pizza_id
 JOIN formatted_toppings ft ON c.order_id = ft.order_id 
 GROUP BY c.order_id, pn.pizza_name
 ORDER BY c.order_id;
- 
+
+-- 6. What is the total quantity of each ingredient used in all delivered pizzas sorted by most frequent first?
+WITH basic_toppings AS(
+SELECT c.order_id,c.pizza_id,pt.topping_name
+FROM customer_orders c
+JOIN pizza_recipes pr ON c.pizza_id = pr.pizza_id
+JOIN unnest(string_to_array(pr.toppings, ',')) AS t(topping_id_str) ON true
+JOIN pizza_toppings pt ON pt.topping_id = topping_id_str:: INT
+),
+extra_toppings AS(
+SELECT
+c.order_id,c.pizza_id,pt.topping_name
+FROM customer_orders c
+JOIN unnest(string_to_array(c.extras, ',')) AS e(extra_id_str) ON TRUE
+JOIN pizza_toppings pt ON pt.topping_id = extra_id_str::INT
+WHERE c.extras IS NOT NULL AND c.extras <> 'null'
+),
+exclusion_toppings AS(
+SELECT
+co.order_id,co.pizza_id, pt.topping_name
+FROM customer_orders co
+JOIN unnest(string_to_array(co.exclusions, ',')) AS exclusions_id_str ON true
+JOIN pizza_toppings pt 
+ON pt.topping_id = exclusions_id_str::INT
+WHERE co.exclusions IS NOT NULL AND co.exclusions <> 'null'
+),
+all_toppings AS (
+SELECT order_id,pizza_id,topping_name FROM basic_toppings
+UNION ALL
+SELECT order_id,pizza_id,topping_name FROM extra_toppings
+),
+final_toppings AS(
+SELECT at.order_id,at.pizza_id, at.topping_name
+FROM all_toppings at 
+LEFT JOIN exclusion_toppings et
+ON at.order_id = et.order_id AND at.pizza_id = et.pizza_id AND at.topping_name = et.topping_name
+WHERE et.topping_name IS NULL OR et.topping_name = 'null'
+)
+SELECT ft.topping_name,COUNT(ft.topping_name)
+FROM final_toppings ft
+JOIN runner_orders ro 
+ON ft.order_id = ro.order_id 
+WHERE ro.distance IS NOT NULL OR ro.distance <> 'null'
+GROUP BY ft.topping_name
+ORDER BY COUNT(ft.topping_name) DESC
