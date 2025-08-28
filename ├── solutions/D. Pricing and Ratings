@@ -10,17 +10,14 @@ WHERE r.distance IS NOT NULL AND r.distance <> 'null';
 
 
 -- 2. What if there was an additional $1 charge for any pizza extras?
-
-
 WITH extras_count AS (
- SELECT c.pizza_id, COUNT(extras_id_str) AS extras_count
+ SELECT c.order_id, c.pizza_id, COUNT(extras_id_str) AS extras_count
  FROM customer_orders c
- LEFT JOIN unnest(string_to_array(c.extras, ',')) AS extras_id_str ON true
- WHERE c.extras IS NOT NULL AND c.extras <> 'null'
- GROUP BY c.pizza_id
+ LEFT JOIN unnest(string_to_array(NULLIF(c.extras,'null'), ',')) AS extras_id_str ON true
+ GROUP BY c.order_id,c.pizza_id
 ),
 delivered_pizzas AS (
- SELECT c.pizza_id, c.order_id
+ SELECT c.order_id, c.pizza_id
  FROM customer_orders c
  JOIN runner_orders r
  ON c.order_id = r.order_id
@@ -32,4 +29,5 @@ SELECT SUM(
   END) AS total_revenue
 FROM extras_count ec
 JOIN delivered_pizzas d
-ON ec.pizza_id = d.pizza_id;
+ON ec.order_id = d.order_id
+AND ec.pizza_id = d.pizza_id;
