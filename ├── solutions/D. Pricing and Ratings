@@ -92,4 +92,26 @@ JOIN runner_ratings rr
 ON c.order_id = rr.order_id
 WHERE distance IS NOT NULL AND distance <> 'null'
 GROUP BY c.customer_id, c.order_id, r.runner_id, rr.rating, c.order_time, r.pickup_time, r.duration, r.distance
-ORDER BY c.order_id
+ORDER BY c.order_id;
+
+
+-- 5. If a Meat Lovers pizza was $12 and Vegetarian $10 fixed prices with no cost for extras and each runner is paid $0.30 per kilometre traveled - how much money does Pizza Runner have left over after these deliveries?
+WITH order_revenue AS (
+SELECT 
+SUM(CASE WHEN pizza_id = 1 THEN 12 
+ELSE 10
+END) AS total_revenue
+FROM customer_orders c
+JOIN runner_orders r
+ON c.order_id = r.order_id
+WHERE r.distance IS NOT NULL AND r.distance <> 'null'
+),
+runner_revenue AS (
+SELECT 
+  SUM(ROUND(CAST(REPLACE(r.distance, 'km', '') AS NUMERIC) * 0.30,2)) AS runner_delivery_fees
+  FROM runner_orders r
+  WHERE r.distance IS NOT NULL AND r.distance <> 'null'
+)
+SELECT 
+(SELECT total_revenue FROM order_revenue) +
+(SELECT runner_delivery_fees FROM runner_revenue) AS total_revenue;
