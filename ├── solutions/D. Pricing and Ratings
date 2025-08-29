@@ -31,3 +31,65 @@ FROM extras_count ec
 JOIN delivered_pizzas d
 ON ec.order_id = d.order_id
 AND ec.pizza_id = d.pizza_id;
+
+
+-- 3. The Pizza Runner team now wants to add an additional ratings system that allows customers to rate their runner, how would you design an additional table for this new dataset - generate a schema for this new table and insert your own data for ratings for each successful customer order between 1 to 5.
+CREATE TABLE runner_ratings (
+  "rating_id" SERIAL ,
+  "order_id" INT,
+  "runner_id" INT,
+  "customer_id" INT,
+  "rating" INT CHECK (rating BETWEEN 1 AND 5),
+  "rating_date" TIMESTAMP
+);
+
+INSERT INTO runner_ratings
+(order_id,runner_id,customer_id,rating,rating_date)
+VALUES
+(1, 1, 101, 5, '2021-01-01 18:48:34'),
+(2, 1, 101, 4, '2020-01-01 19:37:54'),
+(3, 1, 102, 5, '2020-01-03 00:42:37'),
+(4, 2, 103, 3, '2020-01-04 14:36:0'),
+(5, 3, 104, 2, '2020-01-08 21:30:57'),
+(7, 2, 105, 5, '2020-01-08 21:57:45'),
+(8, 2, 102, 4, '2020-01-10 00:40:02'),
+(10, 1, 104, 5, '2020-01-11 19:10:20');
+
+-- 4. Using your newly generated table - can you join all of the information together to form a table which has the following information for successful deliveries?
+-customer_id
+-order_id
+-runner_id
+-rating
+-order_time
+-pickup_time
+-Time between order and pickup
+-Delivery duration
+-Average speed
+-Total number of pizzas
+
+SELECT c.customer_id, c.order_id, r.runner_id, rr.rating, c.order_time, r.pickup_time, 
+(r.pickup_time :: TIMESTAMP - c.order_time) AS order_prepare_time, 
+REPLACE(
+       REPLACE(
+         REPLACE(r.duration, 'minutes', ''),
+         'mins', ''),
+       'minute',
+       '') AS duration_in_mins, 
+ROUND((CAST(REPLACE(r.distance, 'km', '') AS FLOAT) / 
+ NULLIF(
+   (CAST(
+     REPLACE(
+       REPLACE(
+         REPLACE(r.duration, 'minutes', ''),
+         'mins', ''),
+       'minute',
+       '') AS FLOAT) /60),0)) :: NUMERIC , 2) AS avg_speed, 
+COUNT(c.pizza_id) AS number_of_pizzas
+FROM customer_orders c
+JOIN runner_orders r
+ON c.order_id = r.order_id 
+JOIN runner_ratings rr
+ON c.order_id = rr.order_id
+WHERE distance IS NOT NULL AND distance <> 'null'
+GROUP BY c.customer_id, c.order_id, r.runner_id, rr.rating, c.order_time, r.pickup_time, r.duration, r.distance
+ORDER BY c.order_id
